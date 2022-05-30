@@ -1,4 +1,4 @@
-use std::{ collections::HashMap, vec::Vec };
+use std::{ collections::HashMap, vec::Vec, hash::Hash };
 
 #[derive(Copy, Clone)]
 enum Ptr {
@@ -7,34 +7,36 @@ enum Ptr {
     Index(usize),
 }
 
-struct Node {
-    key: usize,
-    value: usize,
+struct Node<K, V> {
+    key: K,
+    value: V,
     prev: Ptr,
     next: Ptr,
 }
 
-pub struct LRUCache {
+pub struct LRUCache<K, V> {
     capacity: usize,
     size: usize,
     head: Ptr,
     tail: Ptr,
-    map: HashMap<usize, usize>,
-    cache: Vec<Node>
+    map: HashMap<K, usize>,
+    cache: Vec<Node<K, V>>
 }
 
-impl LRUCache {
-    pub fn new(capacity: usize) -> LRUCache {
+impl <K, V> LRUCache<K, V> 
+where K: Eq + Hash + Copy, V: Copy
+{
+    pub fn new(capacity: usize) -> LRUCache<K, V> {
         LRUCache { 
             capacity,
             size: 0,
             head: Ptr::Tail,
             tail: Ptr::Head, 
-            map: HashMap::new(),
-            cache: Vec::with_capacity(capacity),
+            map: HashMap::<K, usize>::new(),
+            cache: Vec::<Node<K, V>>::with_capacity(capacity),
         }
     }
-    pub fn insert(&mut self, key: usize, value: usize) -> () {
+    pub fn insert(&mut self, key: K, value: V) -> () {
         if let Some(ix) = self.map.get(&key) {
             self.cache[*ix].value = value;
         } else {
@@ -87,7 +89,7 @@ impl LRUCache {
             }
         }
     }
-    pub fn get(&mut self, key: usize) -> Option<usize> {
+    pub fn get(&mut self, key: K) -> Option<V> {
         if let Some(ix) = self.map.get(&key) {
             if let Ptr::Index(head_next) = self.head {
                 self.head = Ptr::Index(*ix);
@@ -108,7 +110,7 @@ mod tests {
 
     #[test]
     fn test_lru_size() {
-        let lru = LRUCache::new(5);
+        let lru = LRUCache::<u32, u32>::new(5);
 
         assert_eq!(lru.capacity, 5);
         assert_eq!(lru.size, 0);
@@ -147,5 +149,17 @@ mod tests {
         // Last access key is dropped
         assert_eq!(lru.get(2), None);
         assert_eq!(lru.get(5), Some(6));
+    }
+
+    #[test]
+    fn test_str_slice() {
+        let mut lru = LRUCache::new(3);
+        lru.insert("some key", 1);
+        lru.insert("some other key", 5);
+        lru.insert("A third key", 3);
+        lru.insert("a fourth key", 4);
+
+        assert_eq!(lru.get("some key"), None);
+        assert_eq!(lru.get("some other key"), Some(5));
     }
 }
