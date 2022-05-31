@@ -50,7 +50,7 @@ where K: Eq + Hash + Copy, V: Copy
 
                     // TODO - figure out how to better update these pointers
                     match self.cache[to_update].prev {
-                        Ptr::Head => self.head = self.cache[to_update].next,
+                        Ptr::Head => (),
                         Ptr::Tail => (),
                         Ptr::Index(ix) => self.cache[ix].next = self.cache[to_update].next,
                     };
@@ -62,26 +62,23 @@ where K: Eq + Hash + Copy, V: Copy
                     
                     // Insert new node at head
                     self.cache[to_update] = Node{ key, value, next: self.head, prev: Ptr::Head };
-                    self.cache[0].next = Ptr::Index(to_update);
                     if let Ptr::Index(head_next) = self.head {
                         self.cache[head_next].prev = Ptr::Index(to_update);
                     }
+                    self.head = Ptr::Index(to_update);
                     self.map.insert(key, to_update);
                 }
             } else {
-                // Create new node, insert to cache
-                self.cache.push(Node{ key, value, next: self.head, prev: Ptr::Head });
-
-                // Update pointers, p-head.next and p-head.next.prev -> new node
                 let new_ix = self.size;
                 
                 // If list was non-empty, update previous head, else update tail
                 if let Ptr::Index(head_next) = self.head {
+                    self.cache.push(Node{ key, value, next: Ptr::Index(head_next), prev: Ptr::Head });
                     self.cache[head_next].prev = Ptr::Index(new_ix);
                 } else {
+                    self.cache.push(Node{ key, value, next: Ptr::Tail, prev: Ptr::Head });
                     self.tail = Ptr::Index(new_ix);
                 }
-                
                 self.head = Ptr::Index(new_ix);
 
                 self.map.insert(key, new_ix);
@@ -90,11 +87,25 @@ where K: Eq + Hash + Copy, V: Copy
         }
     }
     pub fn get(&mut self, key: K) -> Option<V> {
-        if let Some(ix) = self.map.get(&key) {
+        if let Some(to_return) = self.map.get(&key) {
             if let Ptr::Index(head_next) = self.head {
-                self.head = Ptr::Index(*ix);
-                self.cache[head_next].prev = Ptr::Index(*ix);
-                Some(self.cache[*ix].value)
+                
+                // TODO - figure out how to better update these pointers
+                match self.cache[*to_return].prev {
+                    Ptr::Head => (),
+                    Ptr::Tail => (),
+                    Ptr::Index(ix) => self.cache[ix].next = self.cache[*to_return].next,
+                };
+                match self.cache[*to_return].next {
+                    Ptr::Head => (),
+                    Ptr::Tail => self.tail = self.cache[*to_return].prev,
+                    Ptr::Index(ix) => self.cache[ix].prev = self.cache[*to_return].prev,
+                };
+
+                self.head = Ptr::Index(*to_return);
+                self.cache[head_next].prev = Ptr::Index(*to_return);
+
+                Some(self.cache[*to_return].value)
             } else {
                 None
             }
@@ -150,16 +161,22 @@ mod tests {
         assert_eq!(lru.get(2), None);
         assert_eq!(lru.get(5), Some(6));
     }
-
+    
     #[test]
     fn test_str_slice() {
         let mut lru = LRUCache::new(3);
-        lru.insert("some key", 1);
-        lru.insert("some other key", 5);
-        lru.insert("A third key", 3);
-        lru.insert("a fourth key", 4);
+        lru.insert("key1", 1);
+        lru.insert("key2", 2);
+        lru.insert("key3", 3);
 
-        assert_eq!(lru.get("some key"), None);
-        assert_eq!(lru.get("some other key"), Some(5));
+        assert_eq!(lru.get("key1"), Some(1));
+
+        // Should drop "key2" since "key1" was just read above
+        lru.insert("key4", 4);
+
+        assert_eq!(lru.get("key1"), Some(1));
+        assert_eq!(lru.get("key2"), None);
+        assert_eq!(lru.get("key3"), Some(3));
+        assert_eq!(lru.get("key4"), Some(4));
     }
 }
