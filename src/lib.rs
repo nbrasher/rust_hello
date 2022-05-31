@@ -36,81 +36,65 @@ where K: Eq + Hash + Copy, V: Copy
             cache: Vec::<Node<K, V>>::with_capacity(capacity),
         }
     }
+    fn move_to_head(&mut self, to_move: usize) -> () {
+        match self.cache[to_move].prev {
+            Ptr::Head => (),
+            Ptr::Tail => (),
+            Ptr::Index(ix) => self.cache[ix].next = self.cache[to_move].next,
+        };
+        match self.cache[to_move].next {
+            Ptr::Head => (),
+            Ptr::Tail => self.tail = self.cache[to_move].prev,
+            Ptr::Index(ix) => self.cache[ix].prev = self.cache[to_move].prev,
+        };
+        match self.head {
+            Ptr::Head => (),
+            Ptr::Tail => self.tail = Ptr::Index(to_move),
+            Ptr::Index(ix) => self.cache[ix].prev = Ptr::Index(to_move),
+        };
+        self.cache[to_move].next = self.head;
+        self.head = Ptr::Index(to_move);
+        self.cache[to_move].prev = Ptr::Head;
+    }
     pub fn insert(&mut self, key: K, value: V) -> () {
         if let Some(ix) = self.map.get(&key) {
-            self.cache[*ix].value = value;
+            let ins_ix = *ix;
+            self.move_to_head(ins_ix);
+            self.cache[ins_ix].value = value;
         } else {
             if self.size >= self.capacity {
-                // Update pointers to remove least-recently used node
+
+                // self.tail should be a Ptr::Index unless the cache is empty
                 if let Ptr::Index(to_update) = self.tail {
 
                     // Remove old key from map
-                    let old_key = self.cache[to_update].key;
-                    self.map.remove(&old_key);
-
-                    // TODO - figure out how to better update these pointers
-                    match self.cache[to_update].prev {
-                        Ptr::Head => (),
-                        Ptr::Tail => (),
-                        Ptr::Index(ix) => self.cache[ix].next = self.cache[to_update].next,
-                    };
-                    match self.cache[to_update].next {
-                        Ptr::Head => (),
-                        Ptr::Tail => self.tail = self.cache[to_update].prev,
-                        Ptr::Index(ix) => self.cache[ix].prev = self.cache[to_update].prev,
-                    };
+                    self.map.remove(&self.cache[to_update].key);
                     
                     // Insert new node at head
-                    self.cache[to_update] = Node{ key, value, next: self.head, prev: Ptr::Head };
-                    if let Ptr::Index(head_next) = self.head {
-                        self.cache[head_next].prev = Ptr::Index(to_update);
-                    }
-                    self.head = Ptr::Index(to_update);
+                    self.move_to_head(to_update);
+                    self.cache[to_update].key = key;
+                    self.cache[to_update].value = value;
                     self.map.insert(key, to_update);
                 }
             } else {
-                let new_ix = self.size;
-                
-                // If list was non-empty, update previous head, else update tail
-                if let Ptr::Index(head_next) = self.head {
-                    self.cache.push(Node{ key, value, next: Ptr::Index(head_next), prev: Ptr::Head });
-                    self.cache[head_next].prev = Ptr::Index(new_ix);
-                } else {
-                    self.cache.push(Node{ key, value, next: Ptr::Tail, prev: Ptr::Head });
-                    self.tail = Ptr::Index(new_ix);
-                }
-                self.head = Ptr::Index(new_ix);
+                let to_update = self.size;
 
-                self.map.insert(key, new_ix);
+                self.cache.push(Node{ key, value, next: self.head, prev: Ptr::Head });
+                self.move_to_head(to_update);
+                self.map.insert(key, to_update);
+
                 self.size += 1;
             }
         }
     }
     pub fn get(&mut self, key: K) -> Option<V> {
-        if let Some(to_return) = self.map.get(&key) {
-            if let Ptr::Index(head_next) = self.head {
-                
-                // TODO - figure out how to better update these pointers
-                match self.cache[*to_return].prev {
-                    Ptr::Head => (),
-                    Ptr::Tail => (),
-                    Ptr::Index(ix) => self.cache[ix].next = self.cache[*to_return].next,
-                };
-                match self.cache[*to_return].next {
-                    Ptr::Head => (),
-                    Ptr::Tail => self.tail = self.cache[*to_return].prev,
-                    Ptr::Index(ix) => self.cache[ix].prev = self.cache[*to_return].prev,
-                };
-
-                self.head = Ptr::Index(*to_return);
-                self.cache[head_next].prev = Ptr::Index(*to_return);
-
-                Some(self.cache[*to_return].value)
-            } else {
-                None
-            }
-        } else {
-            None
+        match self.map.get(&key) {
+            Some(ix) => {
+                let ret_ix = *ix;
+                self.move_to_head(ret_ix);
+                Some(self.cache[ret_ix].value)
+            },
+            None => None,
         }
     }
 }
@@ -140,7 +124,7 @@ mod tests {
     }
 
     #[test]
-    fn test_lru_drop() {
+    fn test_ins_drop() {
         let mut lru = LRUCache::new(3);
         lru.insert(1, 1);
         lru.insert(2, 5);
@@ -163,7 +147,7 @@ mod tests {
     }
     
     #[test]
-    fn test_str_slice() {
+    fn test_get_drop() {
         let mut lru = LRUCache::new(3);
         lru.insert("key1", 1);
         lru.insert("key2", 2);

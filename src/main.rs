@@ -5,7 +5,8 @@ fn main() {
     lru.insert("key1", 1);
     lru.insert("key2", 2);
     lru.insert("key3", 3);
-    println!("Value at key1 is {}", lru.get("key1").unwrap());
+
+    println!("Value at key1 is {}\n", lru.get("key1").unwrap());
 
     lru.insert("key4", 4);
 
