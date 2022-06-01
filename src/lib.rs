@@ -1,24 +1,17 @@
 use std::{ collections::HashMap, vec::Vec, hash::Hash };
 
-#[derive(Copy, Clone)]
-enum Ptr {
-    Head,
-    Tail,
-    Index(usize),
-}
-
 struct Node<'a, K, V> {
     key: &'a K,
     value: &'a V,
-    prev: Ptr,
-    next: Ptr,
+    prev: Option<usize>,
+    next: Option<usize>,
 }
 
 pub struct LRUCache<'a, K, V> {
     capacity: usize,
     size: usize,
-    head: Ptr,
-    tail: Ptr,
+    head: Option<usize>,
+    tail: Option<usize>,
     map: HashMap<&'a K, usize>,
     cache: Vec<Node<'a, K, V>>
 }
@@ -30,31 +23,28 @@ where K: Eq + Hash
         LRUCache { 
             capacity,
             size: 0,
-            head: Ptr::Tail,
-            tail: Ptr::Head, 
+            head: None,
+            tail: None, 
             map: HashMap::<&'a K, usize>::new(),
             cache: Vec::<Node<K, V>>::with_capacity(capacity),
         }
     }
     fn move_to_head(&mut self, to_move: usize) -> () {
         match self.cache[to_move].prev {
-            Ptr::Head => (),
-            Ptr::Tail => (),
-            Ptr::Index(ix) => self.cache[ix].next = self.cache[to_move].next,
+            Some(ix) => self.cache[ix].next = self.cache[to_move].next,
+            None => (),
         };
         match self.cache[to_move].next {
-            Ptr::Head => (),
-            Ptr::Tail => self.tail = self.cache[to_move].prev,
-            Ptr::Index(ix) => self.cache[ix].prev = self.cache[to_move].prev,
+            Some(ix) => self.cache[ix].prev = self.cache[to_move].prev,
+            None => self.tail = self.cache[to_move].prev,
         };
         match self.head {
-            Ptr::Head => (),
-            Ptr::Tail => self.tail = Ptr::Index(to_move),
-            Ptr::Index(ix) => self.cache[ix].prev = Ptr::Index(to_move),
+            Some(ix) => self.cache[ix].prev = Some(to_move),
+            None => self.tail = Some(to_move),
         };
         self.cache[to_move].next = self.head;
-        self.head = Ptr::Index(to_move);
-        self.cache[to_move].prev = Ptr::Head;
+        self.head = Some(to_move);
+        self.cache[to_move].prev = None;
     }
     pub fn insert(&mut self, key: &'a K, value: &'a V) -> () {
         if let Some(ix) = self.map.get(&key) {
@@ -64,13 +54,12 @@ where K: Eq + Hash
         } else {
             if self.size >= self.capacity {
 
-                // self.tail should be a Ptr::Index unless the cache is empty
-                if let Ptr::Index(to_update) = self.tail {
+                // self.tail should be Some unless the cache is empty
+                if let Some(to_update) = self.tail {
 
                     // Remove old key from map
                     self.map.remove(&self.cache[to_update].key);
                     
-                    // Insert new node at head
                     self.move_to_head(to_update);
                     self.cache[to_update].key = key;
                     self.cache[to_update].value = value;
@@ -79,7 +68,7 @@ where K: Eq + Hash
             } else {
                 let to_update = self.size;
 
-                self.cache.push(Node{ key, value, next: self.head, prev: Ptr::Head });
+                self.cache.push(Node{ key, value, next: self.head, prev: None });
                 self.move_to_head(to_update);
                 self.map.insert(key, to_update);
 
